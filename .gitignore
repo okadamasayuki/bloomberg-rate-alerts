@@ -1,0 +1,6 @@
+.env
+sent_articles.json
+__pycache__/
+*.pyc
+.venv/
+venv/

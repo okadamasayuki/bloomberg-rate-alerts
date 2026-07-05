@@ -1,0 +1,4 @@
+feedparser>=6.0.0
+python-dotenv>=1.0.0
+# 要約に Claude を使う場合のみ必要（未インストールなら概要をそのまま使用）
+anthropic>=0.40.0
