@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
       - name: チェックアウト
         uses: actions/checkout@v4
@@ -48,6 +48,17 @@ jobs:
         with:
           path: site
 
+      # Pages 側の一時的な "Deployment failed, try again later" に備え自動リトライ
       - name: GitHub Pages へデプロイ
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 少し待機（1回目が失敗した場合）
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+
+      - name: GitHub Pages へデプロイ（再試行）
+        if: steps.deployment.outcome == 'failure'
+        id: deployment_retry
         uses: actions/deploy-pages@v4
