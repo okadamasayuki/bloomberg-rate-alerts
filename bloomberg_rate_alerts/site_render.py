@@ -26,7 +26,24 @@ def _chips(keywords: list[str]) -> str:
     )
 
 
-def _card(index: int, article: Article, keywords: list[str], summary: str) -> str:
+def _analysis_block(analysis) -> str:
+    if analysis is None:
+        return ""
+    dir_label = {"up": "▲ 利上げ要因", "down": "▼ 利下げ要因", "neutral": "＝ 中立"}
+    tag = dir_label.get(analysis.direction, analysis.label)
+    return f"""
+        <div class="analysis {analysis.direction}">
+          <div class="analysis-head">
+            <span class="dir">{html.escape(tag)}</span>
+            <span class="country">対象: {html.escape(analysis.country)}</span>
+          </div>
+          <p class="reason">{html.escape(analysis.reason)}</p>
+        </div>"""
+
+
+def _card(
+    index: int, article: Article, keywords: list[str], summary: str, analysis=None
+) -> str:
     title = html.escape(article.title)
     link = html.escape(article.link)
     return f"""
@@ -37,6 +54,7 @@ def _card(index: int, article: Article, keywords: list[str], summary: str) -> st
         </div>
         <h2 class="title">{title}</h2>
         <p class="summary">{html.escape(summary)}</p>
+        {_analysis_block(analysis)}
         <div class="chips">{_chips(keywords)}</div>
         <a class="read" href="{link}" target="_blank" rel="noopener">
           記事を読む <span aria-hidden="true">↗</span>
@@ -45,7 +63,7 @@ def _card(index: int, article: Article, keywords: list[str], summary: str) -> st
 
 
 def render_page(
-    items: list[tuple[Article, list[str], str]],
+    items: list,
     updated_at: datetime,
 ) -> str:
     count = len(items)
@@ -53,7 +71,8 @@ def render_page(
 
     if count:
         body = "\n".join(
-            _card(i, a, kw, s) for i, (a, kw, s) in enumerate(items, 1)
+            _card(i, item[0], item[1], item[2], item[3] if len(item) > 3 else None)
+            for i, item in enumerate(items, 1)
         )
         status = f'<span class="badge on">{count} 件の金利ニュース</span>'
     else:
@@ -77,6 +96,8 @@ def render_page(
     --ground:#eef1f5; --card:#ffffff; --ink:#14171c; --muted:#5c6470;
     --line:#e3e6ec; --accent:#1d4ed8; --accent-soft:#e7edfb;
     --chip:#eef1f6; --chip-ink:#42506a; --good:#1a7f43; --good-soft:#e4f4ea;
+    --up:#c2410c; --up-soft:#fdecdf; --down:#0f766e; --down-soft:#dcf1ee;
+    --neutral:#5c6470; --neutral-soft:#eceef2;
     --shadow:0 1px 2px rgba(20,25,40,.05), 0 6px 22px rgba(20,25,40,.07);
   }}
   @media (prefers-color-scheme: dark){{
@@ -84,6 +105,8 @@ def render_page(
       --ground:#0e1014; --card:#181b21; --ink:#e7eaee; --muted:#98a1b0;
       --line:#282c35; --accent:#7aa2ff; --accent-soft:#18213a;
       --chip:#20242c; --chip-ink:#aab3c2; --good:#4cc27e; --good-soft:#132a1e;
+      --up:#f4a06a; --up-soft:#2b1c12; --down:#5cc9bd; --down-soft:#0f2521;
+      --neutral:#98a1b0; --neutral-soft:#20242c;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 26px rgba(0,0,0,.45);
     }}
   }}
@@ -129,6 +152,25 @@ def render_page(
   .card-top time{{font-variant-numeric:tabular-nums;}}
   .title{{font-size:16.5px; font-weight:680; line-height:1.5; margin:0 0 8px; text-wrap:balance;}}
   .summary{{font-size:14.5px; color:var(--ink); margin:0 0 12px;}}
+
+  .analysis{{
+    border-radius:11px; padding:11px 13px; margin:0 0 12px;
+    border:1px solid var(--line); background:var(--neutral-soft);
+  }}
+  .analysis.up{{background:var(--up-soft); border-color:color-mix(in srgb,var(--up) 30%,transparent);}}
+  .analysis.down{{background:var(--down-soft); border-color:color-mix(in srgb,var(--down) 30%,transparent);}}
+  .analysis-head{{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:5px;}}
+  .analysis .dir{{font-size:13px; font-weight:750;}}
+  .analysis.up .dir{{color:var(--up);}}
+  .analysis.down .dir{{color:var(--down);}}
+  .analysis.neutral .dir{{color:var(--neutral);}}
+  .analysis .country{{
+    font-size:11.5px; font-weight:600; color:var(--ink);
+    background:var(--card); border:1px solid var(--line);
+    padding:2px 9px; border-radius:999px;
+  }}
+  .analysis .reason{{font-size:12.5px; color:var(--ink); margin:0; line-height:1.6;}}
+
   .chips{{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}}
   .chip{{
     font-size:11.5px; background:var(--chip); color:var(--chip-ink);
@@ -181,7 +223,8 @@ def render_page(
     <footer>
       ブルームバーグのRSSを定期チェックして自動生成しています。<br>
       直近24時間以内・金利関連のニュースのみを表示します。<br>
-      英語記事の見出し・要約は日本語に自動翻訳しています。
+      英語記事の見出し・要約は日本語に自動翻訳しています。<br>
+      対象国・利上げ/利下げ要因は記事の語句からの簡易推定です（参考情報）。
     </footer>
   </div>
 </body>

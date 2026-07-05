@@ -51,6 +51,30 @@ def test_fed_word_is_matched():
     assert "fed" in is_rate_related(art, DEFAULT_KEYWORDS)
 
 
+def test_analyze_hawkish_us():
+    from bloomberg_rate_alerts.analyzer import analyze
+
+    a = analyze("Fed signals a rate hike amid sticky inflation and strong jobs")
+    assert a.country == "米国"
+    assert a.direction == "up"
+    assert "利上げ要因" == a.label
+
+
+def test_analyze_dovish_japan():
+    from bloomberg_rate_alerts.analyzer import analyze
+
+    a = analyze("日銀、景気後退とインフレ鈍化で利下げを検討")
+    assert a.country == "日本"
+    assert a.direction == "down"
+
+
+def test_analyze_neutral_when_no_signal():
+    from bloomberg_rate_alerts.analyzer import analyze
+
+    a = analyze("ECB officials meet to discuss the economy")
+    assert a.direction == "neutral"
+
+
 def test_is_recent_true():
     recent = datetime.now(timezone.utc) - timedelta(hours=2)
     assert is_recent(_article("x", published=recent), max_age_hours=24)

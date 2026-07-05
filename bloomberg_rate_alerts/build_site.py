@@ -17,6 +17,7 @@ import os
 from dataclasses import replace
 from datetime import datetime, timezone
 
+from .analyzer import analyze
 from .config import Config
 from .news_fetcher import find_rate_news
 from .sample_data import sample_items
@@ -26,8 +27,13 @@ from .translate import to_japanese
 
 
 def build_items(config: Config, demo: bool):
+    """(article, keywords, summary, analysis) のリストを返す。"""
     if demo:
-        return sample_items()
+        out = []
+        for article, keywords, summary in sample_items():
+            analysis = analyze(f"{article.title} {summary}")
+            out.append((article, keywords, summary, analysis))
+        return out
 
     matches = find_rate_news(
         feeds=config.feeds,
@@ -44,11 +50,13 @@ def build_items(config: Config, demo: bool):
             api_key=config.anthropic_api_key,
             model=config.anthropic_model,
         )
+        # 分析は翻訳前の原文（主に英語）に対して行う
+        analysis = analyze(f"{article.title} {summary}")
         if config.translate_to_ja:
             # 見出しと要約を日本語化（すでに日本語なら素通し・失敗時は原文）
             article = replace(article, title=to_japanese(article.title))
             summary = to_japanese(summary)
-        items.append((article, keywords, summary))
+        items.append((article, keywords, summary, analysis))
     return items
 
 
