@@ -40,6 +40,17 @@ def test_not_rate_related():
     assert not is_rate_related(art, DEFAULT_KEYWORDS)
 
 
+def test_fed_substring_not_matched():
+    # "federal" の一部として "fed" に部分一致してはいけない（金利無関係）
+    art = _article("Trump escalates fight over federal pipeline rules")
+    assert not is_rate_related(art, DEFAULT_KEYWORDS)
+
+
+def test_fed_word_is_matched():
+    art = _article("The Fed is expected to hold policy this week")
+    assert "fed" in is_rate_related(art, DEFAULT_KEYWORDS)
+
+
 def test_is_recent_true():
     recent = datetime.now(timezone.utc) - timedelta(hours=2)
     assert is_recent(_article("x", published=recent), max_age_hours=24)

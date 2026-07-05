@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -63,10 +64,23 @@ def is_recent(article: Article, max_age_hours: int) -> bool:
     return age.total_seconds() <= max_age_hours * 3600
 
 
+def _keyword_matches(text: str, keyword: str) -> bool:
+    """キーワードが本文にマッチするか判定する。
+
+    英語など ASCII のキーワードは単語境界で判定する
+    （例: "fed" は "Fed" にマッチするが "federal" にはマッチしない）。
+    日本語は語境界の概念がないため部分一致で判定する。
+    """
+    kw = keyword.lower()
+    if kw.isascii():
+        return re.search(rf"\b{re.escape(kw)}\b", text) is not None
+    return kw in text
+
+
 def is_rate_related(article: Article, keywords: list[str]) -> list[str]:
     """マッチしたキーワードのリストを返す（空なら金利関連ではない）。"""
     text = article.matched_text()
-    return [kw for kw in keywords if kw.lower() in text]
+    return [kw for kw in keywords if _keyword_matches(text, kw)]
 
 
 def find_rate_news(
