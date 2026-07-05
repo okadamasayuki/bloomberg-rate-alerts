@@ -25,8 +25,8 @@ from .site_render import FETCH_HOURS, render_page
 from .summarizer import summarize
 from .translate import to_japanese
 
-# サイトは期間フィルタ用に最長期間ぶんを取得しておく
-SITE_MAX_ARTICLES = 40
+# サイトは期間フィルタ用にRSSが持つ範囲ぶんを取得しておく
+SITE_MAX_ARTICLES = 60
 
 
 def build_items(config: Config, demo: bool):

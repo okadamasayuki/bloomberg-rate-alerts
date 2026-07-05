@@ -13,11 +13,13 @@ from .news_fetcher import Article
 
 JST = timezone(timedelta(hours=9), "JST")
 
-# 表示期間フィルタ（ラベル, 時間）。既定は先頭。
-PERIODS: list[tuple[str, int]] = [("24時間", 24), ("3日", 72), ("7日", 168)]
-DEFAULT_HOURS = PERIODS[0][1]
-# サイトが取得しておく最長期間（=フィルタの最大値）
-FETCH_HOURS = max(hours for _, hours in PERIODS)
+# クイック期間プリセット（ラベル, 時間）。0 は「すべて」。
+PERIODS: list[tuple[str, int]] = [
+    ("24時間", 24), ("3日", 72), ("7日", 168), ("すべて", 0)
+]
+DEFAULT_HOURS = 24  # 初期表示
+# サイトが取得しておく範囲（RSSが持つ範囲まで／最大30日）
+FETCH_HOURS = 24 * 30
 
 
 def _fmt(dt: datetime | None) -> str:
@@ -97,7 +99,28 @@ def render_page(
         f'data-hours="{hours}">{html.escape(label)}</button>'
         for label, hours in PERIODS
     )
-    period_bar = f'<div class="periods"><span class="periods-label">期間</span>{period_buttons}</div>'
+
+    # 日付レンジ入力の下限/上限（取得済みデータの範囲）
+    dates = [item[0].published for item in items if item[0].published]
+    if dates:
+        dmin = min(dates).astimezone(JST).strftime("%Y-%m-%d")
+        dmax = max(dates).astimezone(JST).strftime("%Y-%m-%d")
+    else:
+        dmin = dmax = updated_at.astimezone(JST).strftime("%Y-%m-%d")
+    date_attrs = f'min="{dmin}" max="{dmax}"'
+
+    period_bar = f"""<div class="filters">
+      <div class="periods">
+        <span class="periods-label">期間</span>{period_buttons}
+      </div>
+      <div class="daterange">
+        <span class="periods-label">日付指定</span>
+        <input type="date" id="date-from" {date_attrs} aria-label="最初の日">
+        <span class="tilde">〜</span>
+        <input type="date" id="date-to" {date_attrs} aria-label="最後の日">
+        <button class="period-btn" id="date-clear">クリア</button>
+      </div>
+    </div>"""
 
     if count:
         body = "\n".join(
@@ -188,8 +211,22 @@ def render_page(
   .badge.off{{background:var(--good-soft); color:var(--good);}}
   .updated{{color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums;}}
 
-  .periods{{display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin:16px 0 4px;}}
-  .periods-label{{font-size:12px; color:var(--muted); margin-right:2px;}}
+  .filters{{
+    margin:16px 0 4px; padding:12px 13px; border-radius:12px;
+    background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow);
+    display:grid; gap:10px;
+  }}
+  .periods{{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}}
+  .periods-label{{font-size:12px; color:var(--muted); margin-right:2px; min-width:60px;}}
+  .daterange{{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}}
+  .daterange input[type="date"]{{
+    font:inherit; font-size:13px; color:var(--ink);
+    background:var(--ground); border:1px solid var(--line);
+    border-radius:9px; padding:6px 9px; -webkit-appearance:none; appearance:none;
+    min-width:0; flex:1 1 130px;
+  }}
+  .daterange input[type="date"]:focus{{outline:none; border-color:var(--accent);}}
+  .daterange .tilde{{color:var(--muted); flex:none;}}
   .period-btn{{
     font:inherit; font-size:13px; font-weight:600; cursor:pointer;
     padding:6px 14px; border-radius:999px;
@@ -293,31 +330,75 @@ def render_page(
 
   <script>
   (function() {{
-    var btns = document.querySelectorAll('.period-btn');
+    var presets = document.querySelectorAll('.period-btn[data-hours]');
     var cards = document.querySelectorAll('.card[data-epoch]');
     var countEl = document.getElementById('visible-count');
     var emptyEl = document.getElementById('period-empty');
-    function apply(hours) {{
-      var now = Date.now() / 1000, visible = 0;
-      cards.forEach(function(c) {{
-        var ep = c.getAttribute('data-epoch');
-        var show = true;
-        if (ep) {{ show = (now - parseFloat(ep)) / 3600 <= hours; }}
-        c.style.display = show ? '' : 'none';
-        if (show) visible++;
+    var fromEl = document.getElementById('date-from');
+    var toEl = document.getElementById('date-to');
+    var clearEl = document.getElementById('date-clear');
+
+    function setVisible(show) {{
+      var visible = 0;
+      cards.forEach(function(c, i) {{
+        c.style.display = show[i] ? '' : 'none';
+        if (show[i]) visible++;
       }});
       if (countEl) countEl.textContent = visible;
       if (emptyEl) emptyEl.style.display = (visible === 0 && cards.length > 0) ? '' : 'none';
     }}
-    btns.forEach(function(b) {{
+
+    function applyPreset(hours) {{
+      var now = Date.now() / 1000;
+      var show = [];
+      cards.forEach(function(c) {{
+        var ep = c.getAttribute('data-epoch');
+        show.push(!ep ? true : (hours === 0 || (now - parseFloat(ep)) / 3600 <= hours));
+      }});
+      setVisible(show);
+    }}
+
+    function jstMs(str, endOfDay) {{
+      return Date.parse(str + (endOfDay ? 'T23:59:59+09:00' : 'T00:00:00+09:00'));
+    }}
+
+    function applyRange() {{
+      var f = fromEl && fromEl.value, t = toEl && toEl.value;
+      if (!f && !t) return false;
+      presets.forEach(function(x) {{ x.classList.remove('active'); }});
+      var lo = f ? jstMs(f, false) : -Infinity;
+      var hi = t ? jstMs(t, true) : Infinity;
+      var show = [];
+      cards.forEach(function(c) {{
+        var ep = c.getAttribute('data-epoch');
+        if (!ep) {{ show.push(false); return; }}
+        var ms = parseFloat(ep) * 1000;
+        show.push(ms >= lo && ms <= hi);
+      }});
+      setVisible(show);
+      return true;
+    }}
+
+    presets.forEach(function(b) {{
       b.addEventListener('click', function() {{
-        btns.forEach(function(x) {{ x.classList.remove('active'); }});
+        presets.forEach(function(x) {{ x.classList.remove('active'); }});
         b.classList.add('active');
-        apply(parseInt(b.getAttribute('data-hours'), 10));
+        if (fromEl) fromEl.value = '';
+        if (toEl) toEl.value = '';
+        applyPreset(parseInt(b.getAttribute('data-hours'), 10));
       }});
     }});
+    if (fromEl) fromEl.addEventListener('change', applyRange);
+    if (toEl) toEl.addEventListener('change', applyRange);
+    if (clearEl) clearEl.addEventListener('click', function() {{
+      if (fromEl) fromEl.value = '';
+      if (toEl) toEl.value = '';
+      var def = document.querySelector('.period-btn[data-hours="{DEFAULT_HOURS}"]');
+      if (def) def.click();
+    }});
+
     var active = document.querySelector('.period-btn.active');
-    if (active) apply(parseInt(active.getAttribute('data-hours'), 10));
+    if (active) applyPreset(parseInt(active.getAttribute('data-hours'), 10));
   }})();
   </script>
 </body>
