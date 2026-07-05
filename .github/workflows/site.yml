@@ -1,0 +1,53 @@
+name: 金利ニュースサイトを生成して公開
+
+on:
+  schedule:
+    # UTCで3時間ごと（JSTでもおおよそ3時間ごとに更新）
+    - cron: "0 */3 * * *"
+  workflow_dispatch: {}   # 手動実行も可能
+
+# GitHub Pages への公開に必要な権限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時実行を1本に絞る（古いデプロイは打ち切り）
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存関係のインストール
+        run: pip install feedparser python-dotenv
+
+      - name: サイト生成（金利ニュースを取得）
+        run: python -m bloomberg_rate_alerts.build_site --out site
+
+      - name: Pages 設定（未設定なら自動で有効化）
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 成果物をアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: GitHub Pages へデプロイ
+        id: deployment
+        uses: actions/deploy-pages@v4

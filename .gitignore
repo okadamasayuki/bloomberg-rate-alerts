@@ -1,5 +1,6 @@
 .env
 sent_articles.json
+site/
 __pycache__/
 *.pyc
 .venv/

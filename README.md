@@ -1,8 +1,44 @@
-# Bloomberg 金利ニュース → Gmail アラート
+# Bloomberg 金利ニュース要約
 
-ブルームバーグの RSS ニュースを定期的にチェックし、**金利に関係するニュース**があればその要約を Gmail で自分（または指定アドレス）に送るツールです。
+ブルームバーグの RSS ニュースを定期的にチェックし、**金利に関係するニュース**があればその要約を表示・通知するツールです。
 
-## 仕組み
+- 🌐 **Webサイトとして公開**（おすすめ / スマホでURLから閲覧）… 下記「Webサイトとして公開」
+- 📧 メールで送信（任意）… 「メールで送る」
+
+---
+
+## Webサイトとして公開（GitHub Pages）
+
+GitHub Actions が定期的にニュースを取得してページを自動生成し、GitHub Pages で公開します。
+スマホのブラウザから URL を開くだけで最新の金利ニュース要約が見られます（PC操作・サーバー不要）。
+
+### 有効化の手順（初回だけ）
+
+1. このリポジトリを **Public（公開）** にする
+   （Settings → General → 一番下 Danger Zone → "Change repository visibility"）
+   ※ 無料プランの GitHub Pages は公開リポジトリが必要です。コードに秘密情報はありません。
+2. **Settings → Pages** で Source を **「GitHub Actions」** に設定
+   （ワークフロー側でも自動有効化を試みますが、念のため確認してください）
+3. **Actions** タブ →「金利ニュースサイトを生成して公開」→ **Run workflow** で初回実行
+4. 完了すると `https://okadamasayuki.github.io/bloomberg-rate-alerts/` で公開されます
+
+以降は3時間ごとに自動更新されます（`.github/workflows/site.yml` の cron で調整可能）。
+金利ニュースが無いときは「新着なし」の画面が表示されます。
+
+### ローカルで確認
+
+```bash
+pip install feedparser python-dotenv
+python -m bloomberg_rate_alerts.build_site --demo   # サンプルで site/index.html を生成
+# 実データ: python -m bloomberg_rate_alerts.build_site
+open site/index.html   # ブラウザで開く
+```
+
+---
+
+## メールで送る（任意）
+
+### 仕組み
 
 1. Bloomberg の公開 RSS フィード（markets / economics / politics）を取得
 2. 金利関連キーワード（`金利`, `利上げ`, `FOMC`, `Fed`, `rate hike` など）でフィルタ
