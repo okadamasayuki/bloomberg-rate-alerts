@@ -59,6 +59,9 @@ class Config:
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
 
+    # 見出し・要約を日本語に自動翻訳する（APIキー不要の無料翻訳）
+    translate_to_ja: bool = True
+
     # Gmail (SMTP)
     gmail_address: str = ""
     gmail_app_password: str = ""
@@ -83,6 +86,7 @@ class Config:
             max_articles=int(os.getenv("MAX_ARTICLES", "10")),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5"),
+            translate_to_ja=os.getenv("TRANSLATE_TO_JA", "1") != "0",
             gmail_address=gmail,
             gmail_app_password=os.getenv("GMAIL_APP_PASSWORD", ""),
             mail_to=os.getenv("MAIL_TO", gmail),

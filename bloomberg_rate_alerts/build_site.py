@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from .config import Config
@@ -21,6 +22,7 @@ from .news_fetcher import find_rate_news
 from .sample_data import sample_items
 from .site_render import render_page
 from .summarizer import summarize
+from .translate import to_japanese
 
 
 def build_items(config: Config, demo: bool):
@@ -33,19 +35,21 @@ def build_items(config: Config, demo: bool):
         max_age_hours=config.max_age_hours,
     )
     matches = matches[: config.max_articles]
-    return [
-        (
+
+    items = []
+    for article, keywords in matches:
+        summary = summarize(
             article,
             keywords,
-            summarize(
-                article,
-                keywords,
-                api_key=config.anthropic_api_key,
-                model=config.anthropic_model,
-            ),
+            api_key=config.anthropic_api_key,
+            model=config.anthropic_model,
         )
-        for article, keywords in matches
-    ]
+        if config.translate_to_ja:
+            # 見出しと要約を日本語化（すでに日本語なら素通し・失敗時は原文）
+            article = replace(article, title=to_japanese(article.title))
+            summary = to_japanese(summary)
+        items.append((article, keywords, summary))
+    return items
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"生成しました: {out_path}（金利ニュース {len(items)} 件）")
+    head = items[0][0].title if items else "-"
+    print(f"生成しました: {out_path}（金利ニュース {len(items)} 件）先頭見出し: {head}")
     return 0
 
 

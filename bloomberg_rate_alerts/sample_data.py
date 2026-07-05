@@ -16,7 +16,7 @@ def sample_items() -> list[tuple[Article, list[str], str]]:
     data = [
         (
             Article(
-                title="Fed holds rates steady, signals two cuts later this year",
+                title="FRB、金利据え置き 年内2回の利下げを示唆",
                 link="https://www.bloomberg.com/news/sample-1",
                 summary="<p>The Federal Reserve kept its benchmark interest rate "
                 "unchanged, but policymakers signaled they expect to cut rates "
@@ -43,7 +43,7 @@ def sample_items() -> list[tuple[Article, list[str], str]]:
         ),
         (
             Article(
-                title="Treasury yields climb as traders trim rate-cut bets",
+                title="米国債利回りが上昇、利下げ観測の後退で",
                 link="https://www.bloomberg.com/news/sample-3",
                 summary="<p>US Treasury yields rose after stronger-than-expected "
                 "jobs data led traders to pare back expectations for near-term "
