@@ -83,19 +83,47 @@ def is_rate_related(article: Article, keywords: list[str]) -> list[str]:
     return [kw for kw in keywords if _keyword_matches(text, kw)]
 
 
+def _normalize_link(link: str) -> str:
+    """重複判定用にURLを正規化（クエリ・末尾スラッシュを除去）。"""
+    if not link:
+        return ""
+    from urllib.parse import urlsplit, urlunsplit
+
+    p = urlsplit(link.strip())
+    path = p.path.rstrip("/")
+    return urlunsplit((p.scheme.lower(), p.netloc.lower(), path, "", "")).lower()
+
+
 def find_rate_news(
     feeds: list[str],
     keywords: list[str],
     max_age_hours: int,
 ) -> list[tuple[Article, list[str]]]:
-    """金利関連かつ最近の記事を新しい順で返す。"""
+    """金利関連かつ最近の記事を新しい順で返す（重複記事は除去）。"""
     results: list[tuple[Article, list[str]]] = []
+    seen_links: set[str] = set()
+    seen_titles: set[str] = set()
+
     for article in fetch_articles(feeds):
         if not is_recent(article, max_age_hours):
             continue
         matched = is_rate_related(article, keywords)
-        if matched:
-            results.append((article, matched))
+        if not matched:
+            continue
+
+        # 複数フィードに載る同一記事を除外（URL または 見出しが一致）
+        link_key = _normalize_link(article.link)
+        title_key = article.title.strip()
+        if (link_key and link_key in seen_links) or (
+            title_key and title_key in seen_titles
+        ):
+            continue
+        if link_key:
+            seen_links.add(link_key)
+        if title_key:
+            seen_titles.add(title_key)
+
+        results.append((article, matched))
 
     results.sort(
         key=lambda item: item[0].published or datetime.min.replace(tzinfo=timezone.utc),

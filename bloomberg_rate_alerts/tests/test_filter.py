@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from bloomberg_rate_alerts.config import DEFAULT_KEYWORDS
 from bloomberg_rate_alerts.news_fetcher import (
     Article,
+    _normalize_link,
     is_rate_related,
     is_recent,
 )
@@ -73,6 +74,26 @@ def test_analyze_neutral_when_no_signal():
 
     a = analyze("ECB officials meet to discuss the economy")
     assert a.direction == "neutral"
+
+
+def test_normalize_link_ignores_query_and_slash():
+    a = _normalize_link("https://www.bloomberg.com/news/x/?utm=1")
+    b = _normalize_link("https://www.bloomberg.com/news/x")
+    assert a == b
+
+
+def test_find_rate_news_dedups(monkeypatch):
+    import bloomberg_rate_alerts.news_fetcher as nf
+
+    dup = [
+        Article("日銀が利上げを検討", "https://bloomberg.com/a?utm=markets",
+                "政策金利", "Bloomberg", None),
+        Article("日銀が利上げを検討", "https://bloomberg.com/a?utm=economics",
+                "政策金利", "Bloomberg", None),
+    ]
+    monkeypatch.setattr(nf, "fetch_articles", lambda feeds: dup)
+    out = nf.find_rate_news(["f1", "f2"], DEFAULT_KEYWORDS, max_age_hours=24)
+    assert len(out) == 1
 
 
 def test_is_recent_true():

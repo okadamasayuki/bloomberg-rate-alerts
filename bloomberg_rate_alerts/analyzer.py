@@ -34,6 +34,8 @@ _COUNTRIES: list[tuple[str, list[str]]] = [
     ("中国", ["pboc", "yuan", "renminbi", "chinese", "china", "中国", "人民元"]),
     ("豪州", ["rba", "reserve bank of australia", "aussie", "豪"]),
     ("カナダ", ["boc", "bank of canada", "loonie", "カナダ"]),
+    ("ブラジル", ["bcb", "brazil", "brazilian", "durigan", "haddad",
+                  "ブラジル", "ドゥリガン", "ハダジ", "レアル"]),
 ]
 
 # 利上げ方向の材料（pattern, 日本語の理由ラベル）
