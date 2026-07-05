@@ -21,9 +21,12 @@ from .analyzer import analyze
 from .config import Config
 from .news_fetcher import find_rate_news
 from .sample_data import sample_items
-from .site_render import render_page
+from .site_render import FETCH_HOURS, render_page
 from .summarizer import summarize
 from .translate import to_japanese
+
+# サイトは期間フィルタ用に最長期間ぶんを取得しておく
+SITE_MAX_ARTICLES = 40
 
 
 def build_items(config: Config, demo: bool):
@@ -38,9 +41,9 @@ def build_items(config: Config, demo: bool):
     matches = find_rate_news(
         feeds=config.feeds,
         keywords=config.keywords,
-        max_age_hours=config.max_age_hours,
+        max_age_hours=FETCH_HOURS,
     )
-    matches = matches[: config.max_articles]
+    matches = matches[:SITE_MAX_ARTICLES]
 
     items = []
     for article, keywords in matches:

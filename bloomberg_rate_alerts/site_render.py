@@ -13,6 +13,12 @@ from .news_fetcher import Article
 
 JST = timezone(timedelta(hours=9), "JST")
 
+# 表示期間フィルタ（ラベル, 時間）。既定は先頭。
+PERIODS: list[tuple[str, int]] = [("24時間", 24), ("3日", 72), ("7日", 168)]
+DEFAULT_HOURS = PERIODS[0][1]
+# サイトが取得しておく最長期間（=フィルタの最大値）
+FETCH_HOURS = max(hours for _, hours in PERIODS)
+
 
 def _fmt(dt: datetime | None) -> str:
     if dt is None:
@@ -42,12 +48,19 @@ def _analysis_block(analysis) -> str:
 
 
 def _card(
-    index: int, article: Article, keywords: list[str], summary: str, analysis=None
+    index: int,
+    article: Article,
+    keywords: list[str],
+    summary: str,
+    analysis=None,
+    hidden: bool = False,
 ) -> str:
     title = html.escape(article.title)
     link = html.escape(article.link)
+    epoch = "" if article.published is None else str(int(article.published.timestamp()))
+    style = ' style="display:none"' if hidden else ""
     return f"""
-      <article class="card">
+      <article class="card" data-epoch="{epoch}"{style}>
         <div class="card-top">
           <span class="src">{html.escape(article.source)}</span>
           <time>{_fmt(article.published)}</time>
@@ -69,12 +82,47 @@ def render_page(
     count = len(items)
     updated = _fmt(updated_at)
 
+    # 既定期間(24時間)より古いカードは初期状態で隠す（JS無効でも既定表示）
+    def _is_hidden(item) -> bool:
+        published = item[0].published
+        if published is None:
+            return False
+        age_h = (updated_at - published).total_seconds() / 3600
+        return age_h > DEFAULT_HOURS
+
+    visible_now = sum(1 for item in items if not _is_hidden(item))
+
+    period_buttons = "".join(
+        f'<button class="period-btn{" active" if hours == DEFAULT_HOURS else ""}" '
+        f'data-hours="{hours}">{html.escape(label)}</button>'
+        for label, hours in PERIODS
+    )
+    period_bar = f'<div class="periods"><span class="periods-label">期間</span>{period_buttons}</div>'
+
     if count:
         body = "\n".join(
-            _card(i, item[0], item[1], item[2], item[3] if len(item) > 3 else None)
+            _card(
+                i,
+                item[0],
+                item[1],
+                item[2],
+                item[3] if len(item) > 3 else None,
+                hidden=_is_hidden(item),
+            )
             for i, item in enumerate(items, 1)
         )
-        status = f'<span class="badge on">{count} 件の金利ニュース</span>'
+        # 選択期間に該当が無いとき用（JSで表示制御）
+        pe_style = "" if visible_now == 0 else ' style="display:none"'
+        body += f"""
+      <div class="empty" id="period-empty"{pe_style}>
+        <div class="empty-mark">🔍</div>
+        <p class="empty-title">この期間に金利ニュースはありません</p>
+        <p class="empty-sub">上の「期間」を長くすると表示されることがあります。</p>
+      </div>"""
+        status = (
+            '<span class="badge on"><span id="visible-count">'
+            f'{visible_now}</span> 件の金利ニュース</span>'
+        )
     else:
         body = """
       <div class="empty">
@@ -83,6 +131,7 @@ def render_page(
         <p class="empty-sub">新しいニュースが見つかると、ここに要約が表示されます。</p>
       </div>"""
         status = '<span class="badge off">新着なし</span>'
+        period_bar = ""
 
     return f"""<!doctype html>
 <html lang="ja">
@@ -138,6 +187,18 @@ def render_page(
   .badge.on{{background:var(--accent-soft); color:var(--accent);}}
   .badge.off{{background:var(--good-soft); color:var(--good);}}
   .updated{{color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums;}}
+
+  .periods{{display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin:16px 0 4px;}}
+  .periods-label{{font-size:12px; color:var(--muted); margin-right:2px;}}
+  .period-btn{{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    padding:6px 14px; border-radius:999px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+    -webkit-appearance:none; appearance:none;
+  }}
+  .period-btn:hover{{border-color:var(--accent);}}
+  .period-btn.active{{background:var(--accent); border-color:var(--accent); color:#fff;}}
+  .period-btn:focus-visible{{outline:2px solid var(--accent); outline-offset:2px;}}
 
   .feed{{display:grid; gap:14px;}}
   .card{{
@@ -211,6 +272,8 @@ def render_page(
       </div>
     </header>
 
+    {period_bar}
+
     <div class="statusbar">
       {status}
       <span class="updated">最終更新: {updated}</span>
@@ -222,11 +285,41 @@ def render_page(
 
     <footer>
       ブルームバーグのRSSを定期チェックして自動生成しています。<br>
-      直近24時間以内・金利関連のニュースのみを表示します。<br>
+      金利関連のニュースのみを表示します（期間は上部で切り替え）。<br>
       英語記事の見出し・要約は日本語に自動翻訳しています。<br>
       対象国・利上げ/利下げ要因は記事の語句からの簡易推定です（参考情報）。
     </footer>
   </div>
+
+  <script>
+  (function() {{
+    var btns = document.querySelectorAll('.period-btn');
+    var cards = document.querySelectorAll('.card[data-epoch]');
+    var countEl = document.getElementById('visible-count');
+    var emptyEl = document.getElementById('period-empty');
+    function apply(hours) {{
+      var now = Date.now() / 1000, visible = 0;
+      cards.forEach(function(c) {{
+        var ep = c.getAttribute('data-epoch');
+        var show = true;
+        if (ep) {{ show = (now - parseFloat(ep)) / 3600 <= hours; }}
+        c.style.display = show ? '' : 'none';
+        if (show) visible++;
+      }});
+      if (countEl) countEl.textContent = visible;
+      if (emptyEl) emptyEl.style.display = (visible === 0 && cards.length > 0) ? '' : 'none';
+    }}
+    btns.forEach(function(b) {{
+      b.addEventListener('click', function() {{
+        btns.forEach(function(x) {{ x.classList.remove('active'); }});
+        b.classList.add('active');
+        apply(parseInt(b.getAttribute('data-hours'), 10));
+      }});
+    }});
+    var active = document.querySelector('.period-btn.active');
+    if (active) apply(parseInt(active.getAttribute('data-hours'), 10));
+  }})();
+  </script>
 </body>
 </html>
 """
