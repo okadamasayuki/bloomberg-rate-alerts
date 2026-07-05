@@ -120,6 +120,10 @@ def render_page(
         <input type="date" id="date-to" {date_attrs} aria-label="最後の日">
         <button class="period-btn" id="date-clear">クリア</button>
       </div>
+      <div class="copyrow">
+        <button class="copy-btn" id="copy-btn">📋 表示中の内容をコピー</button>
+        <span class="copy-feedback" id="copy-feedback" role="status" aria-live="polite"></span>
+      </div>
     </div>"""
 
     if count:
@@ -227,6 +231,16 @@ def render_page(
   }}
   .daterange input[type="date"]:focus{{outline:none; border-color:var(--accent);}}
   .daterange .tilde{{color:var(--muted); flex:none;}}
+  .copyrow{{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}}
+  .copy-btn{{
+    font:inherit; font-size:13px; font-weight:650; cursor:pointer;
+    padding:7px 15px; border-radius:9px;
+    border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent);
+    -webkit-appearance:none; appearance:none;
+  }}
+  .copy-btn:hover{{background:var(--accent); color:#fff;}}
+  .copy-btn:focus-visible{{outline:2px solid var(--accent); outline-offset:2px;}}
+  .copy-feedback{{font-size:12.5px; color:var(--good); font-weight:600;}}
   .period-btn{{
     font:inherit; font-size:13px; font-weight:600; cursor:pointer;
     padding:6px 14px; border-radius:999px;
@@ -399,6 +413,75 @@ def render_page(
 
     var active = document.querySelector('.period-btn.active');
     if (active) applyPreset(parseInt(active.getAttribute('data-hours'), 10));
+
+    // --- 表示中の内容をコピー ---
+    var copyBtn = document.getElementById('copy-btn');
+    var fbEl = document.getElementById('copy-feedback');
+    var fbTimer = null;
+    function showFeedback(msg) {{
+      if (!fbEl) return;
+      fbEl.textContent = msg;
+      if (fbTimer) clearTimeout(fbTimer);
+      fbTimer = setTimeout(function() {{ fbEl.textContent = ''; }}, 2500);
+    }}
+    function buildCopyText() {{
+      var lines = ['金利ニュース要約', location.href, ''];
+      var n = 0;
+      cards.forEach(function(c) {{
+        if (c.style.display === 'none') return;
+        n++;
+        var q = function(sel) {{
+          var e = c.querySelector(sel);
+          return e ? e.textContent.trim().replace(/\\s+/g, ' ') : '';
+        }};
+        var title = q('.title');
+        var src = q('.src'), time = q('.card-top time');
+        var dir = q('.analysis .dir'), country = q('.analysis .country');
+        var reason = q('.analysis .reason');
+        var summary = q('.summary');
+        var linkEl = c.querySelector('.read');
+        var link = linkEl ? linkEl.getAttribute('href') : '';
+        lines.push('■ ' + title);
+        var meta = [src, time].filter(Boolean).join(' / ');
+        if (meta) lines.push(meta);
+        var da = [dir, country].filter(Boolean).join('｜');
+        if (da) lines.push(da);
+        if (summary) lines.push(summary);
+        if (reason) lines.push('理由: ' + reason);
+        if (link) lines.push(link);
+        lines.push('');
+      }});
+      return {{ text: lines.join('\\n').trim() + '\\n', count: n }};
+    }}
+    function fallbackCopy(text) {{
+      try {{
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      }} catch (e) {{ return false; }}
+    }}
+    if (copyBtn) {{
+      copyBtn.addEventListener('click', function() {{
+        var r = buildCopyText();
+        if (r.count === 0) {{ showFeedback('コピーする内容がありません'); return; }}
+        var ok = function() {{ showFeedback(r.count + '件をコピーしました'); }};
+        var ng = function() {{ showFeedback('コピーできませんでした'); }};
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+          navigator.clipboard.writeText(r.text).then(ok, function() {{
+            fallbackCopy(r.text) ? ok() : ng();
+          }});
+        }} else {{
+          fallbackCopy(r.text) ? ok() : ng();
+        }}
+      }});
+    }}
   }})();
   </script>
 </body>
